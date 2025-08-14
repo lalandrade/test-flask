@@ -1,0 +1,26 @@
+[
+    {
+        "nome": "lavinia de souza andrade",
+        "email": "laviniaandrade1213@gmail.com",
+        "idade": "21",
+        "senha": "123456"
+    },
+    {
+        "nome": "lavinia de souza andrade",
+        "email": "laviniaandrade1213@gmail.com",
+        "idade": "22",
+        "senha": "123456"
+    },
+    {
+        "nome": "julia",
+        "email": "julia@gmail.com",
+        "idade": "22",
+        "senha": "123456"
+    },
+    {
+        "nome": "pedro",
+        "email": "pedro@gmail.com",
+        "idade": "23",
+        "senha": "123456"
+    }
+]
