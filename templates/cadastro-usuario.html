@@ -9,7 +9,8 @@
 </head>
 <body>
     <div class="content">
-        <form action="/cadastro-usuario.html" method="POST">
+        <form action="{{ url_for('cadastrar-usuario') }}" method="POST">
+
         <legend>Cadastro</legend>
         <div class="input-box">
             <label for="nome">Nome:</label>
@@ -24,6 +25,11 @@
             <input type="number" id="idade" name="idade" required>
         </div>
         <div class="input-box">
+            <label for="cpf">CPF:</label>
+            <input type="text" id="cpf" name="cpf" required>
+
+        </div>
+        <div class="input-box">
             <label for="senha">Senha:</label>
             <input type="password" id="senha" name="senha" required>
         </div>
@@ -32,7 +38,8 @@
         
     </div>
         <div class="link">
-            <a href="/usuarios-html">Ver todos os usuários</a>
+            <a href="{{ url_for('buscar_usuarios')}}">Ver todos os usuários</a>
         </div>
+        <script src="../static/usuario.js"></script>
 </body>
 </html>
