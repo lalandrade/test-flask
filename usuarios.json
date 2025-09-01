@@ -5,6 +5,16 @@
         "cpf": "2131241412",
         "email": "dsadasdasda@gmail.com",
         "idade": "22",
-        "senha": "fsdfsefs"
+        "senha": "fsdfsefs",
+        "perfil": "admin"
+    },
+    {
+        "id": "75fe0718-a87a-478e-a739-0e9e3dc8a840",
+        "nome": "lala",
+        "cpf": "123456789",
+        "email": "lala@gmail.com",
+        "idade": "22",
+        "senha": "$2b$12$If4ti5bgzT9wlNxujynsCes17VnNjqxj/fr.IMq3hBhHTkvp4Ix8K",
+        "perfil": "admin"
     }
 ]

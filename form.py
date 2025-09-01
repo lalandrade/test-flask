@@ -1,135 +1,179 @@
 # Importa as bibliotecas necessárias do Flask e módulos padrão do Python
-from flask import Flask, render_template, request, jsonify
-import json  # Para manipulação de arquivos JSON
-import os    # Para verificar existência de arquivos
-import uuid  # Para gerar IDs únicos para usuários
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+import json
+import os
+import uuid
+import bcrypt
 
-# Cria a aplicação Flask
+# Inicializa a aplicação Flask
 app = Flask(__name__)
+app.secret_key = "sua_chave_super_secreta"  # chave necessária para sessão
 
-# Função para carregar os usuários do arquivo JSON
-def carregar_usuarios():
-    # Tenta verificar se o arquivo 'usuarios.json' existe e lê os dados
-    try:
-        if os.path.exists("usuarios.json"):  # Verifica existência do arquivo
-            with open("usuarios.json", "r", encoding="utf-8") as arquivo:
-                return json.load(arquivo)  # Retorna a lista de usuários
-        else:
-            return []  # Retorna lista vazia se o arquivo não existir
-    except:
-        return []  # Retorna lista vazia em caso de erro na leitura
+class Usuario:
+    def __init__(self, nome, cpf, email, idade, senha,perfil, id=None):
+        self.id = id or str(uuid.uuid4())
+        self.nome = nome
+        self.cpf = cpf
+        self.email = email
+        self.idade = idade
+        # senha já é armazenada com hash
+        self.senha = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        self.perfil = perfil  # admin ou user
 
-# Função para salvar um novo usuário no arquivo JSON
-def salvar_usuario(usuario):
-    # Carrega os usuários existentes
-    usuarios = carregar_usuarios()
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "cpf": self.cpf,
+            "email": self.email,
+            "idade": self.idade,
+            "senha": self.senha,
+            "perfil": self.perfil
+        }
 
-    try:
-        # Adiciona o novo usuário à lista
-        usuarios.append(usuario)
 
-        # Salva a lista atualizada no arquivo 'usuarios.json'
-        with open("usuarios.json", "w", encoding="utf-8") as arquivo:
-            json.dump(usuarios, arquivo, indent=4)
+class UsuarioRepository:
+    ARQUIVO = "usuarios.json"
 
-        return True  # Retorna True se o salvamento foi bem-sucedido
-    except:
-        return False  # Retorna False em caso de erro ao salvar
+    @classmethod
+    def carregar(cls):
+        if os.path.exists(cls.ARQUIVO):
+            with open(cls.ARQUIVO, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return []
 
-# Função para deletar um usuário pelo ID
-def deletar_usuario(id):
-    usuarios = carregar_usuarios()  # Carrega usuários existentes
-    usuarios_filtrados = [u for u in usuarios if u.get("id") != id]  # Remove usuário com o ID fornecido
+    @classmethod
+    def salvar(cls, usuarios):
+        with open(cls.ARQUIVO, "w", encoding="utf-8") as f:
+            json.dump(usuarios, f, indent=4)
 
-    # Verifica se algum usuário foi removido
-    if len(usuarios) == len(usuarios_filtrados):
-        return False  # Nenhum usuário removido
+    @classmethod
+    def adicionar(cls, usuario: Usuario):
+        usuarios = cls.carregar()
+        usuarios.append(usuario.to_dict())
+        cls.salvar(usuarios)
 
-    try:
-        # Salva a lista filtrada no arquivo JSON
-        with open("usuarios.json", "w", encoding="utf-8") as arquivo:
-            json.dump(usuarios_filtrados, arquivo, indent=4)
-        return True  # Retorna True se deletado com sucesso
-    except:
-        return False  # Retorna False em caso de erro ao salvar
+    @classmethod
+    def buscar_por_email(cls, email):
+        usuarios = cls.carregar()
+        for u in usuarios:
+            if u["email"] == email:
+                return u
+        return None
 
-# Rota principal, renderiza a página inicial com formulário de cadastro
+    @classmethod
+    def deletar(cls, id):
+        usuarios = cls.carregar()
+        filtrados = [u for u in usuarios if u["id"] != id]
+        if len(usuarios) == len(filtrados):
+            return False
+        cls.salvar(filtrados)
+        return True
+
+    @classmethod
+    def atualizar(cls, usuario_edit):
+        usuarios = cls.carregar()
+        for u in usuarios:
+            if u["id"] == usuario_edit.get("id"):
+                u.update(usuario_edit)
+                cls.salvar(usuarios)
+                return True
+        return False
+
+
+# ---------------- ROTAS ---------------- #
+
 @app.route("/")
 def home():
     return render_template("cadastro-usuario.html")
 
-# Rota para cadastrar usuário via formulário HTML (POST)
+@app.route("/login")
+def login_get():
+    return render_template("login.html")
+
+
 @app.route("/cadastro-usuario", methods=["POST"])
 def cadastrar_usuario():
-    # Recupera os dados enviados pelo formulário
-    nome = request.form.get("nome")
-    cpf = request.form.get("cpf")
+    usuario = Usuario(
+        nome=request.form.get("nome"),
+        cpf=request.form.get("cpf"),
+        email=request.form.get("email"),
+        idade=request.form.get("idade"),
+        senha=request.form.get("senha"),
+        perfil=request.form.get("perfil")
+    )
+    UsuarioRepository.adicionar(usuario)
+    return f"Usuário '{usuario.nome}' cadastrado com sucesso!"
+
+
+# ---------- LOGIN / LOGOUT ---------- #
+@app.route("/login", methods=["POST"])
+def login_post():
     email = request.form.get("email")
-    idade = request.form.get("idade")
     senha = request.form.get("senha")
 
-    # Cria um dicionário com os dados do usuário, incluindo um ID único
-    usuario = {
-        "id": str(uuid.uuid4()),
-        "nome": nome,
-        "cpf": cpf,
-        "email": email,
-        "idade": idade,
-        "senha": senha,
-    }
+    usuario = UsuarioRepository.buscar_por_email(email)
+    if usuario and bcrypt.checkpw(senha.encode("utf-8"), usuario["senha"].encode("utf-8")):
+        # salvar sessão
+        session["id_usuario"] = usuario["id"]
+        session["perfil"] = usuario["perfil"]
+        return f"Login realizado com sucesso! Bem-vindo, {usuario['nome']}."
+    return "Email ou senha inválidos", 401
 
-    # Tenta salvar o usuário no arquivo JSON
-    status = salvar_usuario(usuario)
 
-    # Retorna mensagem de sucesso ou erro
-    if status:
-        return f"Usuário '{usuario['nome']}' cadastrado com sucesso!"
-    else:
-        return "Não foi possível cadastrar o usuário"
+@app.route("/logout")
+def logout():
+    session.clear()
+    return "Usuário deslogado!"
 
-# Rota para retornar todos os usuários em formato JSON
+
+# ---------- ROTAS PROTEGIDAS ---------- #
 @app.route("/usuarios/json")
 def buscar_usuarios_json():
-    usuarios = carregar_usuarios()  # Carrega usuários do arquivo
-    return jsonify(usuarios)  # Retorna JSON
+    if "id_usuario" not in session:
+        return "Acesso negado. Faça login.", 401
+    if session["perfil"] != "admin":
+        return "Acesso negado. Área de administração.", 401
+    return jsonify(UsuarioRepository.carregar())
 
-# Rota para exibir todos os usuários em uma página HTML
+
 @app.route("/usuarios")
 def buscar_usuarios():
-    usuarios = carregar_usuarios()  # Carrega usuários do arquivo
-    return render_template("usuarios.html", usuarios=usuarios)  # Renderiza template com lista de usuários
+    if "id_usuario" not in session:
+        return "Acesso negado. Faça login.", 401
+    if session["perfil"] != "admin":
+        return "Acesso negado. Área de administração.", 401
+    usuarios = UsuarioRepository.carregar()
+    return render_template("usuarios.html", usuarios=usuarios)
 
-# Rota para deletar usuário pelo ID via requisição DELETE
+
 @app.route("/usuarios/<id>", methods=["DELETE"])
 def excluir_usuario(id):
-    sucesso = deletar_usuario(id)  # Tenta deletar usuário
+    # Apenas admin pode deletar
+    if session.get("perfil") != "admin":
+        return "Acesso negado. Apenas administradores podem deletar usuários.", 403
+    if UsuarioRepository.deletar(id):
+        return jsonify({"mensagem": "Usuário deletado com sucesso."}), 200
+    return jsonify({"erro": "Usuário não encontrado."}), 404
 
-    if sucesso:
-        return jsonify({"mensagem": f"Usuário deletado com sucesso."}), 200  # Retorna sucesso
-    else:
-        return jsonify({"erro": "Usuário não encontrado."}), 404  # Retorna erro se usuário não existe
 
-# Rota para atualizar um usuário via requisição PUT
 @app.route("/usuarios/", methods=["PUT"])
-def atualizar_usuario():   
-    usuario_edit = request.get_json()  # Captura dados enviados em JSON
-    usuarios = carregar_usuarios()     # Carrega lista de usuários existente
+def atualizar_usuario():
+    if "id_usuario" not in session:
+        return "Acesso negado. Faça login.", 401
 
-    # Procura usuário pelo ID e atualiza os dados
-    for usuario in usuarios:
-        if usuario.get("id") == usuario_edit.get("id"):
-            usuario.update(usuario_edit)
-            break
-        
-    try:
-        # Salva a lista atualizada no arquivo JSON
-        with open("usuarios.json", "w", encoding="utf-8") as arquivo:
-            json.dump(usuarios, arquivo, indent=4)
+    usuario_edit = request.get_json()
+    if UsuarioRepository.atualizar(usuario_edit):
+        return jsonify({"mensagem": "Usuário atualizado com sucesso"}), 200
+    return jsonify({"erro": "Não foi possível salvar as modificações"}), 404
 
-        return jsonify({"mensagem": "Usuário atualizado com sucesso"}), 200  # Sucesso
-    except:
-        return jsonify({"erro": "Não foi possível salvar as modificações"}), 404  # Erro ao salvar
 
-# Executa o servidor Flask em modo debug
-if __name__ == '__main__':
+# Área restrita para admins
+@app.route("/admin")
+def admin_area():
+    if session.get("perfil") != "admin":
+        return redirect(url_for("home"))
+    return "Área do administrador"
+
+if __name__ == "__main__":
     app.run(debug=True)
